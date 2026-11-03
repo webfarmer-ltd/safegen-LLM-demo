@@ -1,33 +1,28 @@
-# Gemma 4 E2B × SafeGen型 SFT → GRPO PoC
+# Gemma 4 E2B × SafeGen型 SFT → GRPO PoC のデモコード
 
-> **既存の `ollama-gemma4` リポジトリに追加するファイル群。** Ollama 側の推論コンテナには手を加えない。
->
 > **注意**: これは SafeGen-LLM の学習原理（SFT → GRPO、5段階の安全報酬）を試す **Blocksworld向けの独自ミニ実装**。論文が用いる PDDL3/OPTIC/VAL データセットの完全再現ではない。GPUでのSFT/GRPOトレーニングはこの配布環境では未実行。CPU-only の報酬関数と生成データのテストは実行済み。
 
 ## 追加ファイルと役割
 
 ```text
 ollama-gemma4/
-├── Dockerfile.train                   # 既存（そのまま）
-├── Dockerfile.safegen                 # 追加：独立した Python3.11/CUDA12.4 学習環境
-├── README_SafeGen.md                 # 本ファイル
+├── Dockerfile.safegen                # 独立した Python3.11/CUDA12.4 学習環境
+├── README.md                         # 本ファイル
 ├── src/
-│   ├── train_lora_gemma4E2B.py       # 既存（そのまま）
-│   ├── predict_with_trained_model.py # 既存（そのまま）
-│   ├── safegen_blocks.py             # 追加：記号的な状態遷移・安全検証・報酬
-│   ├── safegen_reward.py             # 追加：GRPO向けReward callback
-│   ├── safegen_val_reward.py         # 追加：VAL実装用の接続口（任意）
-│   ├── make_safegen_dataset.py       # 追加：教師データ・GRPOデータ生成
-│   ├── train_sft_safegen.py          # 追加：Gemma4 E2B QLoRA SFT
-│   ├── train_grpo_safegen.py         # 追加：SFTアダプタから GRPO
-│   └── evaluate_safegen.py          # 追加：SFT/GRPO の成功率を計測
-├── tests/test_reward.py              # 追加：CPU側ユニットテスト
-└── data/safegen_*.jsonl              # 追加：学習/テスト用ダミーデータ
+│   ├── safegen_blocks.py             # 記号的な状態遷移・安全検証・報酬
+│   ├── safegen_reward.py             # GRPO向けReward callback
+│   ├── safegen_val_reward.py         # VAL実装用の接続口（任意）
+│   ├── make_safegen_dataset.py       # 教師データ・GRPOデータ生成
+│   ├── train_sft_safegen.py          # Gemma4 E2B QLoRA SFT
+│   ├── train_grpo_safegen.py         # SFTアダプタから GRPO
+│   └── evaluate_safegen.py           # SFT/GRPO の成功率を計測
+├── tests/test_reward.py              # CPU側ユニットテスト
+└── data/safegen_*.jsonl              # 学習/テスト用ダミーデータ
 ```
 
 ## 1. コンテナのビルド
 
-RTX 3090 24GBを想定。既存DockerfileのPython 3.10/PyTorch 2.5.1は近年のTRL/Transformersに対して古いため、**既存コンテナを変更せず、Python 3.11、PyTorch 2.6/cu124の独立したイメージ**を作る。PyTorchのCUDA対応wheelにランタイムライブラリが含まれるため、ベースイメージは `python:3.11-slim-bookworm` を使用する。
+RTX 3090 24GBを想定。**Python 3.11、PyTorch 2.6/cu124のイメージ**を作る。PyTorchのCUDA対応wheelにランタイムライブラリが含まれるため、ベースイメージは `python:3.11-slim-bookworm` を使用する。
 
 ```bash
 docker build -f Dockerfile.safegen -t safegen:latest .
@@ -36,6 +31,7 @@ docker build -f Dockerfile.safegen -t safegen:latest .
 Gemma 4のモデル読み込みAPIは更新が多い。初回ビルド成功後、`pip freeze`を保存して実際に動作したバージョンへ固定すること。ホスト側にNVIDIA Container ToolkitとCUDA12.4をサポートするドライバーが必要。既存のOllamaコンテナには一切影響しない。
 
 ## 2. コンテナ起動
+実行例。私の場合、 `/media/ohmasa/hdd2/ohmasa/hf_cache:/workspace/.cache/huggingface` にgemma4-E2Bのパラメータがあるので、そこをパイプする。
 
 ```bash
 docker run --gpus all -it --rm \
