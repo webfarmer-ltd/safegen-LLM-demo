@@ -5,7 +5,7 @@
 ## 追加ファイルと役割
 
 ```text
-ollama-gemma4/
+safegen-LLM-demo/
 ├── Dockerfile.safegen                # 独立した Python3.11/CUDA12.4 学習環境
 ├── README.md                         # 本ファイル
 ├── src/
