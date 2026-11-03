@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 from datasets import load_dataset
 from peft import LoraConfig
-from transformers import AutoModelForImageTextToText, AutoProcessor, BitsAndBytesConfig
+from transformers import AutoModelForImageTextToText, AutoTokenizer, BitsAndBytesConfig
 from trl import SFTConfig, SFTTrainer
 
 MODEL_ID = "google/gemma-4-E2B-it"
@@ -23,8 +23,11 @@ def load_base(model_id: str):
         device_map={"": torch.cuda.current_device()},
     )
     model.config.use_cache = False
-    processor = AutoProcessor.from_pretrained(model_id)
-    return model, processor, dtype
+    # processor = AutoProcessor.from_pretrained(model_id)
+    # return model, processor, dtype
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    tokenizer.padding_side = "right"
+    return model, tokenizer, dtype
 
 
 def main():
@@ -36,15 +39,24 @@ def main():
     parser.add_argument("--epochs", type=int, default=3)
     opts = parser.parse_args()
 
-    model, processor, dtype = load_base(opts.model)
+    model, tokenizer, dtype = load_base(opts.model)
     dataset = load_dataset("json", data_files={"train": opts.train_jsonl})["train"]
 
     # Gemma 4: omit target_modules so PEFT uses the language-model defaults
     # instead of accidentally inserting LoRA into the vision/audio towers.
     # We do not retrain/save large token embeddings or lm_head: no new tokens.
     lora = LoraConfig(
-        r=16, lora_alpha=32, lora_dropout=0.05, bias="none", task_type="CAUSAL_LM"
+        r=16, 
+        lora_alpha=32, 
+        lora_dropout=0.05, 
+        bias="none", 
+        task_type="CAUSAL_LM",
+        target_modules=(
+            r".*language_model.*\."
+            r"(q_proj|k_proj|v_proj|o_proj|gate_proj|up_proj|down_proj)"
+        ),
     )
+    
     config = SFTConfig(
         output_dir=opts.output,
         max_length=opts.max_length,
@@ -65,11 +77,12 @@ def main():
     )
     trainer = SFTTrainer(
         model=model, args=config, train_dataset=dataset,
-        peft_config=lora, processing_class=processor,
+        peft_config=lora, processing_class=tokenizer,
     )
+    trainer.model.print_trainable_parameters()
     trainer.train()
     trainer.save_model(opts.output)
-    processor.save_pretrained(opts.output)
+    tokenizer.save_pretrained(opts.output)
     print("Saved SFT LoRA adapter:", opts.output)
 
 

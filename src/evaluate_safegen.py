@@ -24,15 +24,15 @@ def main():
         prompt = processor.apply_chat_template(
             sample["prompt"], tokenize=False, add_generation_prompt=True
         )
-        inputs = processor(text=prompt, return_tensors="pt")
+        inputs = processor(prompt, return_tensors="pt")
         inputs = {k: v.to("cuda:0") if hasattr(v, "to") else v for k, v in inputs.items()}
         with torch.inference_mode():
             outputs = model.generate(
                 **inputs, max_new_tokens=opts.max_new_tokens, do_sample=False,
-                pad_token_id=processor.tokenizer.pad_token_id,
+                pad_token_id=processor.pad_token_id,
             )
         continuation = outputs[0, inputs["input_ids"].shape[-1]:]
-        text = processor.tokenizer.decode(continuation, skip_special_tokens=True)
+        text = processor.decode(continuation, skip_special_tokens=True)
         grade = grade_plan(text, json.loads(sample["problem_json"]))
         counts[grade.category] = counts.get(grade.category, 0) + 1
         print(f"[{i+1}/{len(data)}] {grade.category} reward={grade.reward:.3f}\n{text}\n")

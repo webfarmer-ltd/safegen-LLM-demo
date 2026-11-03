@@ -1,0 +1,39 @@
+# Independent training environment. Does not change your existing Dockerfile.train.
+# The RTX 3090 host needs NVIDIA Container Toolkit and a driver supporting CUDA 12.4.
+# PyTorch's cu124 pip wheels bundle CUDA runtime libraries; no CUDA devel image needed.
+FROM python:3.11-slim-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    HF_HOME=/workspace/.cache/huggingface \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      git bash ca-certificates build-essential libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Compatible CUDA/Python/PyTorch set for recent TRL + Gemma 4.
+# RUN python -m pip install --upgrade pip && \
+#     python -m pip install \
+#       torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 \
+#       --index-url https://download.pytorch.org/whl/cu124
+RUN python -m pip install --upgrade pip && \
+    python -m pip install --no-cache-dir \
+      torch==2.6.0 \
+      torchvision==0.21.0 \
+      torchaudio==2.6.0 \
+      --index-url https://pypi.org/simple
+
+RUN python -m pip install \
+      "transformers>=5.4" \
+      "trl[peft,quantization,vlm]>=0.29" \
+      "peft>=0.19" \
+      "accelerate>=1.5" \
+      "datasets>=3.0" \
+      "bitsandbytes>=0.46" \
+      "pytest>=8.0" \
+      "sentencepiece" "protobuf" "tensorboard" \
+    && python -m pip check
+
+WORKDIR /workspace
+CMD ["bash"]

@@ -26,6 +26,7 @@ def main():
     opts = p.parse_args()
 
     model, processor, dtype = load_base(opts.model)
+    processor.padding_side = "left"
     # Crucial: GRPO resumes *trainable* SFT adapter; don't start another fresh LoRA.
     model = PeftModel.from_pretrained(model, opts.sft_adapter, is_trainable=True)
     dataset = load_dataset("json", data_files={"train": opts.train_jsonl})["train"]
@@ -38,7 +39,7 @@ def main():
         # 1 prompt per microbatch * 4 accumulation = group of 4 rollouts.
         gradient_accumulation_steps=opts.generations,
         num_generations=opts.generations,
-        max_prompt_length=opts.max_prompt_length,
+        # max_prompt_length=opts.max_prompt_length,
         max_completion_length=opts.max_completion_length,
         temperature=0.6,
         top_p=0.9,
